@@ -1,0 +1,14 @@
+# Ignore datasets
+data/
+
+# Ignore virtual environment
+env/
+
+# Ignore Workspace
+Workspace/
+
+# Other temporary files
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
