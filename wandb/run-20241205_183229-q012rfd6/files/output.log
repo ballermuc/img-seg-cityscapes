@@ -1,0 +1,19 @@
+Epoch: 1 | LR = 0.0005
+training:  10%|████████████▍                                                                                                                | 37/372 [00:05<00:51,  6.55it/s, ce_loss - 1.458]
+Traceback (most recent call last):
+  File "/work/img-seg-cityscapes/./launch.py", line 191, in <module>
+    d_log_training = epoch_training.run(loader_training, i_epoch = i)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/img-seg-cityscapes/epoch.py", line 122, in run
+    tp, fp, fn, tn = smp.metrics.get_stats(
+                     ^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/img-seg-cityscapes/venv/lib/python3.12/site-packages/segmentation_models_pytorch/metrics/functional.py", line 153, in get_stats
+    tp, fp, fn, tn = _get_stats_multiclass(output, target, num_classes, ignore_index)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/img-seg-cityscapes/venv/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/work/img-seg-cityscapes/venv/lib/python3.12/site-packages/segmentation_models_pytorch/metrics/functional.py", line 172, in _get_stats_multiclass
+    num_elements = torch.prod(torch.tensor(dims)).long()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

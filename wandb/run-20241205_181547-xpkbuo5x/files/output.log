@@ -1,0 +1,10 @@
+Epoch: 1 | LR = 0.0005
+training: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 372/372 [00:45<00:00,  8.26it/s, ce_loss - 0.7392]
+Traceback (most recent call last):
+  File "/work/img-seg-cityscapes/./launch.py", line 191, in <module>
+    d_log_training = epoch_training.run(loader_training, i_epoch = i)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/img-seg-cityscapes/epoch.py", line 239, in run
+    self.writer.log(log_data)
+                    ^^^^^^^^
+NameError: name 'log_data' is not defined

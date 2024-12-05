@@ -1,0 +1,16 @@
+{"time":"2024-12-05T18:39:20.939567736+01:00","level":"INFO","msg":"using version","core version":"0.19.0"}
+{"time":"2024-12-05T18:39:20.93958391+01:00","level":"INFO","msg":"created symlink","path":"/work/img-seg-cityscapes/wandb/run-20241205_183920-mjyk8rsk/logs/debug-core.log"}
+{"time":"2024-12-05T18:39:21.051815461+01:00","level":"INFO","msg":"created new stream","id":"mjyk8rsk"}
+{"time":"2024-12-05T18:39:21.051853248+01:00","level":"INFO","msg":"stream: started","id":"mjyk8rsk"}
+{"time":"2024-12-05T18:39:21.051877544+01:00","level":"INFO","msg":"writer: Do: started","stream_id":"mjyk8rsk"}
+{"time":"2024-12-05T18:39:21.051923192+01:00","level":"INFO","msg":"handler: started","stream_id":"mjyk8rsk"}
+{"time":"2024-12-05T18:39:21.051880028+01:00","level":"INFO","msg":"sender: started","stream_id":"mjyk8rsk"}
+{"time":"2024-12-05T18:39:21.348741064+01:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2024-12-05T18:42:29.695183326+01:00","level":"INFO","msg":"stream: closing","id":"mjyk8rsk"}
+{"time":"2024-12-05T18:42:29.695235725+01:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2024-12-05T18:42:29.695896721+01:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2024-12-05T18:42:30.779807067+01:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2024-12-05T18:42:30.986976428+01:00","level":"INFO","msg":"handler: closed","stream_id":"mjyk8rsk"}
+{"time":"2024-12-05T18:42:30.987042908+01:00","level":"INFO","msg":"sender: closed","stream_id":"mjyk8rsk"}
+{"time":"2024-12-05T18:42:30.987032622+01:00","level":"INFO","msg":"writer: Close: closed","stream_id":"mjyk8rsk"}
+{"time":"2024-12-05T18:42:30.987166432+01:00","level":"INFO","msg":"stream: closed","id":"mjyk8rsk"}

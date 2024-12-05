@@ -7,9 +7,9 @@ import segmentation_models_pytorch as smp
 from segmentation_models_pytorch.encoders import get_preprocessing_fn
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 from dataset_cityscapes import *
 from epoch import *
+import wandb
 
 
 def to_tensor(x, **kwargs):
@@ -43,6 +43,28 @@ N_WORKERS = 16  # to be adapted for each system
 # i_* stands for an index, e.g.: for i_object, object in enumerate(l_object):
 # d_* stands for "dict"
 # k_* stands for "key" (of a dictionary item)
+
+
+# Initialize wandb
+wandb.init(
+    project="img-seg-cityscapes",
+    name=S_EXPERIMENT,
+    config={
+        "epochs": N_EPOCH_MAX,
+        "batch_size_training": N_SIZE_BATCH_TRAINING,
+        "batch_size_validation": N_SIZE_BATCH_VALIDATION,
+        "batch_size_test": N_SIZE_BATCH_TEST,
+        "learning_rate": 5e-4,
+        "model": "DeepLabV3+",
+        "encoder": S_NAME_ENCODER,
+        "optimizer": "Adam",
+    }
+)
+
+wandb.config.update({
+    "patch_size": N_SIZE_PATCH,
+    "num_workers": N_WORKERS
+})
 
 
 # ======== SETUP ======== #
@@ -137,15 +159,6 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     T_max = N_EPOCH_MAX,
     eta_min = 1e-6,
 )
-# setup Tensorboard logs writer
-os.makedirs(os.path.join(P_DIR_LOGS, "Training"), exist_ok = True)
-os.makedirs(os.path.join(P_DIR_LOGS, "Validation"), exist_ok = True)
-writer_training = SummaryWriter(
-    log_dir = os.path.join(P_DIR_LOGS, "Training")
-)
-writer_validation = SummaryWriter(
-    log_dir = os.path.join(P_DIR_LOGS, "Validation")
-)
 
 
 # ======== TRAINING ======== #
@@ -158,7 +171,7 @@ epoch_training = Epoch(
     optimizer = optimizer,
     device = S_DEVICE,
     verbose = True,
-    writer = writer_training,
+    writer = wandb,
 )
 # initialize validation instance
 epoch_validation = Epoch(
@@ -167,7 +180,7 @@ epoch_validation = Epoch(
     loss = loss,
     device = S_DEVICE,
     verbose = True,
-    writer = writer_validation,
+    writer = wandb,
 )
 # start training phase
 os.makedirs(P_DIR_CKPT, exist_ok = True)
@@ -192,32 +205,44 @@ for i in range(1, N_EPOCH_MAX + 1):
                 os.path.join(P_DIR_CKPT, f"best_model_epoch_{i:0>4}.pth")
             )
             print("Model saved!")
+            wandb.log({"Best IoU": max_score, "Epoch": i})
         print()
     scheduler.step()
-writer_training.close()
-writer_validation.close()
-
 
 # ======== TEST ======== #
 
 print("\n==== TEST PHASE====\n")
 # create export directory
-os.makedirs(P_DIR_EXPORT, exist_ok = True)
+os.makedirs(P_DIR_EXPORT, exist_ok=True)
 # load best model
 p_model_best = sorted(glob(os.path.join(P_DIR_CKPT, "*.pth")))[-1]
 print(f"Loading following model: {p_model_best}")
 model = torch.load(p_model_best)
+
 # initialize test instance
 test_epoch = Epoch(
     model,
-    s_phase = "test",
-    loss = loss,
-    p_dir_export = P_DIR_EXPORT,
-    device = S_DEVICE,
-    verbose = True,
+    s_phase="test",
+    loss=loss,
+    p_dir_export=P_DIR_EXPORT,
+    device=S_DEVICE,
+    verbose=True,
+    writer=wandb,  # Ensure WandB writer is passed here
 )
-test_epoch.run(loader_test)
+
+# Run the test phase and log results
+d_log_test = test_epoch.run(loader_test)
+iou_score_test = round(d_log_test["iou_score"] * 100, 2)
+print(f"Test IoU = {iou_score_test}%")
+
+# Log test metrics to WandB
+wandb.log({"Test IoU": iou_score_test, **d_log_test})
+
+# ======== CLEANUP ======== #
 
 # remove intermediate checkpoints
 for model_checkpoint in sorted(glob(os.path.join(P_DIR_CKPT, "*.pth")))[:-1]:
     os.remove(model_checkpoint)
+
+# Finish WandB session
+wandb.finish()

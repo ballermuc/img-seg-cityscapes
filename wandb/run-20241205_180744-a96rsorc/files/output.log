@@ -1,0 +1,15 @@
+Epoch: 1 | LR = 0.0005
+training: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 372/372 [00:45<00:00,  8.24it/s, ce_loss - 0.7247]
+Traceback (most recent call last):
+  File "/work/img-seg-cityscapes/./launch.py", line 191, in <module>
+    d_log_training = epoch_training.run(loader_training, i_epoch = i)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/img-seg-cityscapes/epoch.py", line 211, in run
+    lut.lookup_nchw(
+  File "/work/img-seg-cityscapes/lookup_table.py", line 178, in lookup_nchw
+    raise ValueError(
+ValueError: Incompatible dimensions, dtypes or devices for LuT or input:
+- td_i_lut.dtype = torch.int32, expected torch.int32
+- td_u_input.dtype = torch.uint8, expected torch.uint8
+- td_u_input.ndim = 3, expected 4
+- td_u_input.device = cuda:0 should be the same as td_i_lut.device = cuda:0

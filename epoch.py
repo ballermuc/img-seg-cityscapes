@@ -5,6 +5,7 @@ import os
 import cv2
 import torch
 import lookup_table as lut
+import wandb
 
 
 class Epoch:
@@ -190,49 +191,68 @@ class Epoch:
                     # save prediction image
                     cv2.imwrite(p_export_prediction_id, ar_f_prediction_id)
                     cv2.imwrite(p_export_prediction_color, ar_f_prediction_color)
-        # compute metrics
+
+        # Compute IoU for all phases
         if self.s_phase != "test":  # if valid target is available
             logs["iou_score"] = smp.metrics.functional.iou_score(
-                tp = d_confusion["tp"],
-                fp = d_confusion["fp"],
-                fn = d_confusion["fn"],
-                tn = d_confusion["tn"],
-                reduction = "macro-imagewise"
+                tp=d_confusion["tp"],
+                fp=d_confusion["fp"],
+                fn=d_confusion["fn"],
+                tn=d_confusion["tn"],
+                reduction="macro-imagewise",
             ).detach().cpu().numpy()
-        # write logs to Tensorboard
-        if self.writer is not None:
-            self.writer.add_scalar(
-                f"Losses/{self.loss.__name__}",
-                logs[self.loss.__name__],
-                i_epoch,
-            )
-            self.writer.add_scalar(
-                "Metrics/IoU",
-                logs["iou_score"],
-                i_epoch,
-            )
-            # use last computed batch for generating image logs (max. 4 images)
-            self.writer.add_images(
-                "Predictions/Color",
-                img_tensor = lut.lookup_nchw(
-                    td_u_input = prediction[:4].byte(),
-                    td_i_lut = dataloader.dataset.th_i_lut_trainid2color,
-                ),
-                global_step = i_epoch,
-            )
-            self.writer.add_images(
-                "Targets/Color",
-                img_tensor = lut.lookup_nchw(
-                    td_u_input = target[:4].unsqueeze(dim = 1).byte(),
-                    td_i_lut = dataloader.dataset.th_i_lut_trainid2color,
-                ),
-                global_step = i_epoch,
-            )
-            self.writer.add_images(
-                "Images/Color",
-                # approximate de-normalization
-                img_tensor = ((image[:4] + 2) * 64).round().clamp(0, 255).byte(),
-                global_step = i_epoch,
-            )
-            self.writer.flush()
+        else:  # Test phase
+            # Ensure IoU is only calculated if confusion matrix is valid
+            if d_confusion["tp"] is not None and d_confusion["fp"] is not None:
+                logs["iou_score"] = smp.metrics.functional.iou_score(
+                    tp=d_confusion["tp"],
+                    fp=d_confusion["fp"],
+                    fn=d_confusion["fn"],
+                    tn=d_confusion["tn"],
+                    reduction="macro-imagewise",
+                ).detach().cpu().numpy()
+            else:
+                logs["iou_score"] = None  # No IoU calculated in this case
+
+        # Log IoU to WandB
+        if self.writer is not None:  # Assuming writer is wandb
+            log_data = {
+                "IoU": logs["iou_score"]
+            }
+
+            # Additional logging for non-test phases
+            if self.s_phase != "test":
+                log_data.update({
+                    f"Loss/{self.loss.__name__}": logs.get(self.loss.__name__, 0),
+                    "Epoch": i_epoch,
+                    "Predictions/Color": [
+                        wandb.Image(
+                            lut.lookup_nchw(
+                                td_u_input=prediction[i].unsqueeze(0).byte(),
+                                td_i_lut=dataloader.dataset.th_i_lut_trainid2color
+                            ),
+                            caption=f"Prediction {i}"
+                        ) for i in range(min(4, prediction.shape[0]))
+                    ],
+                    "Targets/Color": [
+                        wandb.Image(
+                            lut.lookup_nchw(
+                                td_u_input=target[i].unsqueeze(0).unsqueeze(dim=1).byte(),
+                                td_i_lut=dataloader.dataset.th_i_lut_trainid2color
+                            ),
+                            caption=f"Target {i}"
+                        ) for i in range(min(4, target.shape[0]))
+                    ],
+                    "Images/Color": [
+                        wandb.Image(
+                            ((image[i] + 2) * 64).round().clamp(0, 255).byte(),
+                            caption=f"Image {i}"
+                        ) for i in range(min(4, image.shape[0]))
+                    ]
+                })
+            else:
+                print(f"Test IoU: {logs['iou_score']:.4f}")
+
+            self.writer.log(log_data)
+
         return logs
