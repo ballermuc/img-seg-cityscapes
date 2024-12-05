@@ -15,7 +15,6 @@ from epoch import *
 def to_tensor(x, **kwargs):
     return x.transpose(2, 0, 1).astype("float32")
 
-# tensorboard command: tensorboard --logdir=./Workspace/DeepLabV3+_EfficientNetB4_CE_20241119_160812/Logs/
 
 # ======== CONFIGURATION ======== #
 
@@ -32,12 +31,12 @@ P_DIR_EXPORT = os.path.join("./Workspace", S_EXPERIMENT, "Export")
 S_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 S_NAME_ENCODER = "efficientnet-b4"
 S_NAME_WEIGHTS = "imagenet"
-N_EPOCH_MAX = 60
+N_EPOCH_MAX = 1
 N_SIZE_BATCH_TRAINING = 8  # training batch size
 N_SIZE_BATCH_VALIDATION = 4  # validation batch size
 N_SIZE_BATCH_TEST = 1  # test batch size
 N_SIZE_PATCH = 512  # patch size for random crop
-N_STEP_LOG = 5  # evaluate on validation set and save model every N iterations
+N_STEP_LOG = 1  # evaluate on validation set and save model every N iterations
 N_WORKERS = 16  # to be adapted for each system
 # other notations:
 # l_* stands for "list"

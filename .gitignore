@@ -3,6 +3,7 @@ data/
 
 # Ignore virtual environment
 env/
+venv/
 
 # Ignore Workspace
 Workspace/
