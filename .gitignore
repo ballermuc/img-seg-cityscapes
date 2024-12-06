@@ -5,6 +5,9 @@ data/
 env/
 venv/
 
+# Ignore wandb
+wandb/
+
 # Ignore Workspace
 Workspace/
 

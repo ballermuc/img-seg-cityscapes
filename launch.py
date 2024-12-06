@@ -23,15 +23,13 @@ cv2.ocl.setUseOpenCL(False)
 # p_* stands for "path"
 # s_* stands for "string" (i.e. all other strings than paths)
 # n_* stands for n-dim size (0-dim: number of objects, 1-dim+: shape)
-S_EXPERIMENT = f"DeepLabV3+_EfficientNetB4_CE_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
 P_DIR_DATA = "./data"
-P_DIR_CKPT = os.path.join("./Workspace", S_EXPERIMENT, "Checkpoints")
-P_DIR_LOGS = os.path.join("./Workspace", S_EXPERIMENT, "Logs")
-P_DIR_EXPORT = os.path.join("./Workspace", S_EXPERIMENT, "Export")
 S_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+MODEL_NAME = "DeepLabV3Plus"
 S_NAME_ENCODER = "efficientnet-b4"
 S_NAME_WEIGHTS = "imagenet"
-N_EPOCH_MAX = 1
+N_EPOCH_MAX = 2
 N_SIZE_BATCH_TRAINING = 8  # training batch size
 N_SIZE_BATCH_VALIDATION = 4  # validation batch size
 N_SIZE_BATCH_TEST = 1  # test batch size
@@ -44,6 +42,16 @@ N_WORKERS = 16  # to be adapted for each system
 # d_* stands for "dict"
 # k_* stands for "key" (of a dictionary item)
 
+S_EXPERIMENT = (
+    f"{MODEL_NAME}_"
+    f"{S_NAME_ENCODER}_"
+    f"BS_Train_{N_SIZE_BATCH_TRAINING}_"
+    f"Patch_{N_SIZE_PATCH}_"
+    f"Epochs_{N_EPOCH_MAX}"
+)
+P_DIR_CKPT = os.path.join("./Workspace", S_EXPERIMENT, "Checkpoints")
+P_DIR_LOGS = os.path.join("./Workspace", S_EXPERIMENT, "Logs")
+P_DIR_EXPORT = os.path.join("./Workspace", S_EXPERIMENT, "Export")
 
 # Initialize wandb
 wandb.init(
@@ -209,40 +217,27 @@ for i in range(1, N_EPOCH_MAX + 1):
         print()
     scheduler.step()
 
-# ======== TEST ======== #
-
-print("\n==== TEST PHASE====\n")
-# create export directory
-os.makedirs(P_DIR_EXPORT, exist_ok=True)
-# load best model
-p_model_best = sorted(glob(os.path.join(P_DIR_CKPT, "*.pth")))[-1]
-print(f"Loading following model: {p_model_best}")
-model = torch.load(p_model_best)
-
-# initialize test instance
-test_epoch = Epoch(
-    model,
-    s_phase="test",
-    loss=loss,
-    p_dir_export=P_DIR_EXPORT,
-    device=S_DEVICE,
-    verbose=True,
-    writer=wandb,  # Ensure WandB writer is passed here
-)
-
-# Run the test phase and log results
-d_log_test = test_epoch.run(loader_test)
-iou_score_test = round(d_log_test["iou_score"] * 100, 2)
-print(f"Test IoU = {iou_score_test}%")
-
-# Log test metrics to WandB
-wandb.log({"Test IoU": iou_score_test, **d_log_test})
-
-# ======== CLEANUP ======== #
-
-# remove intermediate checkpoints
-for model_checkpoint in sorted(glob(os.path.join(P_DIR_CKPT, "*.pth")))[:-1]:
-    os.remove(model_checkpoint)
-
 # Finish WandB session
 wandb.finish()
+
+# # ======== TEST ======== #
+# print("\n==== TEST PHASE====\n")
+# # create export directory
+# os.makedirs(P_DIR_EXPORT, exist_ok = True)
+# # load best model
+# p_model_best = sorted(glob(os.path.join(P_DIR_CKPT, "*.pth")))[-1]
+# print(f"Loading following model: {p_model_best}")
+# model = torch.load(p_model_best)
+# # initialize test instance
+# test_epoch = Epoch(
+#     model,
+#     s_phase = "test",
+#     loss = loss,
+#     p_dir_export = P_DIR_EXPORT,
+#     device = S_DEVICE,
+#     verbose = True,
+# )
+# test_epoch.run(loader_test)
+# # remove intermediate checkpoints
+# for model_checkpoint in sorted(glob(os.path.join(P_DIR_CKPT, "*.pth")))[:-1]:
+#     os.remove(model_checkpoint)
