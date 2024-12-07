@@ -46,7 +46,7 @@ class Epoch:
 
     def batch_update(self, image, target=None):
         if self.s_phase == "training":
-            # perform inference, optimization and loss evaluation
+            # Perform inference, optimization, and loss evaluation
             self.optimizer.zero_grad()
             prediction = self.model.forward(image)
             loss = self.loss(prediction, target)
@@ -54,13 +54,13 @@ class Epoch:
             self.optimizer.step()
             return loss, prediction
         elif self.s_phase == "validation":
-            # perform inference and loss evaluation
+            # Perform inference and loss evaluation
             with torch.inference_mode():
                 prediction = self.model.forward(image)
                 loss = self.loss(prediction, target)
             return loss, prediction
         else:  # assume "test"
-            # perform inference only
+            # Perform inference only
             with torch.inference_mode():
                 prediction = self.model.forward(image)
             return None, prediction
@@ -68,7 +68,7 @@ class Epoch:
     def on_epoch_start(self):
         if self.s_phase == "training":
             self.model.train()
-        else:  # assume "validation " or "test"
+        else:  # assume "validation" or "test"
             self.model.eval()
 
     def run(self, dataloader, i_epoch=-1):
@@ -168,6 +168,10 @@ class Epoch:
 
                 # Only log predictions and images for validation
                 if self.s_phase == "validation":
+                    # Print file names being logged
+                    for file_name in l_p_image[:4]:
+                        print(f"Logging to WandB: {file_name}")
+
                     log_data.update({
                         "Predictions/Color": [
                             wandb.Image(
@@ -175,7 +179,7 @@ class Epoch:
                                     td_u_input=prediction[i].unsqueeze(0).byte(),
                                     td_i_lut=dataloader.dataset.th_i_lut_trainid2color
                                 ),
-                                caption=f"Prediction {i}"
+                                caption=f"Prediction {i}: {l_p_image[i]}"
                             ) for i in range(min(4, prediction.shape[0]))
                         ],
                         "Targets/Color": [
@@ -184,18 +188,18 @@ class Epoch:
                                     td_u_input=target[i].unsqueeze(0).unsqueeze(dim=1).byte(),
                                     td_i_lut=dataloader.dataset.th_i_lut_trainid2color
                                 ),
-                                caption=f"Target {i}"
+                                caption=f"Target {i}: {l_p_target[i]}"
                             ) for i in range(min(4, target.shape[0]))
                         ],
                         "Images/Color": [
                             wandb.Image(
                                 ((image[i] + 2) * 64).round().clamp(0, 255).byte(),
-                                caption=f"Image {i}"
+                                caption=f"Image {i}: {l_p_image[i]}"
                             ) for i in range(min(4, image.shape[0]))
                         ]
                     })
 
-                # Log only once per epoch
-                self.writer.log(log_data, step=i_epoch)
+                    # Log to WandB
+                    self.writer.log(log_data, step=i_epoch)
 
             return logs

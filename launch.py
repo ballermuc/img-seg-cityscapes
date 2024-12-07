@@ -29,7 +29,7 @@ S_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_NAME = "DeepLabV3Plus"
 S_NAME_ENCODER = "efficientnet-b4"
 S_NAME_WEIGHTS = "imagenet"
-N_EPOCH_MAX = 2
+N_EPOCH_MAX = 5
 N_SIZE_BATCH_TRAINING = 8  # training batch size
 N_SIZE_BATCH_VALIDATION = 4  # validation batch size
 N_SIZE_BATCH_TEST = 1  # test batch size
@@ -63,7 +63,7 @@ wandb.init(
         "batch_size_validation": N_SIZE_BATCH_VALIDATION,
         "batch_size_test": N_SIZE_BATCH_TEST,
         "learning_rate": 5e-4,
-        "model": "DeepLabV3+",
+        "model": MODEL_NAME,
         "encoder": S_NAME_ENCODER,
         "optimizer": "Adam",
     }
@@ -93,6 +93,10 @@ model = smp.DeepLabV3Plus(
 #)
 # To enable multi-GPU training. Set device_ids accordingly.
 #model = torch.nn.DataParallel(model, device_ids=[0, 1])
+
+# Watch the model to log parameters (weights, biases) and gradients
+wandb.watch(model, log="all", log_freq=100)
+
 # setup input normalization
 preprocess_input = get_preprocessing_fn(
     encoder_name = S_NAME_ENCODER,
@@ -153,6 +157,7 @@ loader_test = DataLoader(
 # setup loss
 loss = torch.nn.CrossEntropyLoss()
 loss.__name__ = "ce_loss"
+
 # To use SMP losses
 #loss = smp.losses.DiceLoss(mode="multiclass")
 #loss.__name__ = "dice_loss"
@@ -208,10 +213,9 @@ for i in range(1, N_EPOCH_MAX + 1):
         # save model if better than previous best
         if max_score < iou_score:
             max_score = iou_score
-            torch.save(
-                model,
-                os.path.join(P_DIR_CKPT, f"best_model_epoch_{i:0>4}.pth")
-            )
+            wandb.unwatch(model)
+            torch.save(model, os.path.join(P_DIR_CKPT, f"best_model_epoch_{i:0>4}.pth"))
+            wandb.watch(model, log="all", log_freq=100)
             print("Model saved!")
             wandb.log({"Best IoU": max_score, "Epoch": i})
         print()
