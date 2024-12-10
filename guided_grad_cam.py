@@ -31,6 +31,8 @@ TARGET_CLASS = 6  # Target class index in Cityscapes (e.g., car, pedestrian, etc
 model = torch.load(P_DIR_MODEL, map_location=S_DEVICE)
 model.eval()
 model = model.to(S_DEVICE)
+for name, module in model.named_modules():
+    print(name)  # Print all module names
 
 # Input preprocessing
 preprocess_input = get_preprocessing_fn(encoder_name=S_NAME_ENCODER, pretrained=S_NAME_WEIGHTS)
@@ -59,15 +61,14 @@ def preprocess_image(image):
 preprocessed_image = preprocess_image(original_image)
 
 
-# ======== GUIDED GRAD-CAM IMPLEMENTATION ======== #
+# ======== GRAD-CAM IMPLEMENTATION ======== #
 
-def guided_grad_cam(model, image, target_class, target_layer):
+def compute_grad_cam(model, image, target_class, target_layer):
     """
-    Compute Guided Grad-CAM for the given model and input image.
+    Compute Grad-CAM for a specific layer.
     """
     model.eval()
 
-    # Hook to capture gradients
     gradients = []
     activations = []
 
@@ -78,33 +79,20 @@ def guided_grad_cam(model, image, target_class, target_layer):
         activations.append(output)
 
     # Register hooks on the target layer
-    hook_registered = False
     for name, module in model.named_modules():
         if name == target_layer:
             module.register_forward_hook(forward_hook)
             module.register_backward_hook(backward_hook)
-            hook_registered = True
             break
 
-    if not hook_registered:
-        raise RuntimeError(f"Target layer '{target_layer}' not found in the model.")
-
-    # Enable gradient computation for the input
-    image.requires_grad = True
-
     # Forward pass
+    image.requires_grad = True
     output = model(image)
     target_score = output[:, target_class, :, :].mean()  # Target class score
     model.zero_grad()
 
     # Backward pass
     target_score.backward()
-
-    # Ensure hooks captured values
-    if not gradients:
-        raise RuntimeError("Gradient hook failed to capture gradients.")
-    if not activations:
-        raise RuntimeError("Activation hook failed to capture activations.")
 
     # Extract gradients and activations
     gradient = gradients[0].cpu().detach().numpy()[0]  # Shape: [C, H, W]
@@ -119,39 +107,46 @@ def guided_grad_cam(model, image, target_class, target_layer):
     grad_cam = cv2.resize(grad_cam, (image_width, image_height))
     grad_cam = (grad_cam - grad_cam.min()) / (grad_cam.max() - grad_cam.min())
 
-    # Guided Backpropagation
-    guided_gradients = image.grad.abs().cpu().detach().numpy()[0]
-    guided_grad_cam = guided_gradients.mean(axis=0) * grad_cam
-
-    return grad_cam, guided_grad_cam
+    return grad_cam
 
 
-# Identify the target layer
-# The target layer is specific to your model. Adjust this based on the printed model structure.
-target_layer = "segmentation_head.0"  # Example: Choose the last convolutional layer
+# ======== GRAD-CAM EVOLUTION ======== #
 
-# Compute Guided Grad-CAM
-grad_cam, guided_grad_cam = guided_grad_cam(model, preprocessed_image, TARGET_CLASS, target_layer)
+# Selected decoder layers for Grad-CAM evolution
+decoder_layers = [
+    "segmentation_head.2"
+]
 
-# ======== SAVE IMAGES ======== #
+grad_cams = {}
 
-# Create output directory if not exists
+# Compute Grad-CAM for each selected layer
+for layer in decoder_layers:
+    grad_cams[layer] = compute_grad_cam(model, preprocessed_image, TARGET_CLASS, layer)
+
+
+# ======== VISUALIZATION ======== #
+
+def visualize_grad_cam_evolution(original_image, grad_cams, save_path=None):
+    """
+    Visualize Grad-CAM evolution across selected layers.
+    """
+    plt.figure(figsize=(20, 10))
+    num_layers = len(grad_cams)
+    for idx, (layer_name, grad_cam) in enumerate(grad_cams.items()):
+        plt.subplot(1, num_layers, idx + 1)
+        plt.title(f"Layer: {layer_name}", fontsize=10)
+        plt.imshow(original_image / 255.0, alpha=0.8)
+        plt.imshow(grad_cam, cmap=cm.jet, alpha=0.5)
+        plt.axis("off")
+
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight")
+    plt.show()
+
+
+# Save Grad-CAM evolution plot
 os.makedirs(P_DIR_OUTPUT, exist_ok=True)
+evolution_plot_path = os.path.join(P_DIR_OUTPUT, f"grad_cam_evolution_{IMAGE_NAME}")
+visualize_grad_cam_evolution(original_image, grad_cams, save_path=evolution_plot_path)
 
-# Save Original Image
-original_path = os.path.join(P_DIR_OUTPUT, f"original_{IMAGE_NAME}")
-cv2.imwrite(original_path, cv2.cvtColor(original_image, cv2.COLOR_RGB2BGR))
-
-# Save Grad-CAM Image
-grad_cam_colormap = (cm.jet(grad_cam)[:, :, :3] * 255).astype(np.uint8)  # Convert to BGR format
-grad_cam_overlay = cv2.addWeighted(original_image, 0.5, grad_cam_colormap, 0.5, 0)
-grad_cam_path = os.path.join(P_DIR_OUTPUT, f"grad_cam_{IMAGE_NAME}")
-cv2.imwrite(grad_cam_path, cv2.cvtColor(grad_cam_overlay, cv2.COLOR_RGB2BGR))
-
-# Save Guided Grad-CAM Image
-guided_grad_cam_rescaled = (guided_grad_cam - guided_grad_cam.min()) / (guided_grad_cam.max() - guided_grad_cam.min())
-guided_grad_cam_rescaled = (cm.hot(guided_grad_cam_rescaled)[:, :, :3] * 255).astype(np.uint8)
-guided_grad_cam_path = os.path.join(P_DIR_OUTPUT, f"guided_grad_cam_{IMAGE_NAME}")
-cv2.imwrite(guided_grad_cam_path, guided_grad_cam_rescaled)
-
-print(f"Images saved to {P_DIR_OUTPUT}:\n- {original_path}\n- {grad_cam_path}\n- {guided_grad_cam_path}")
+print(f"Grad-CAM evolution plot saved to {evolution_plot_path}")

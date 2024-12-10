@@ -6,6 +6,7 @@ import os
 import segmentation_models_pytorch as smp
 from segmentation_models_pytorch.encoders import get_preprocessing_fn
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from dataset_cityscapes import *
 from epoch import *
@@ -26,10 +27,10 @@ cv2.ocl.setUseOpenCL(False)
 
 P_DIR_DATA = "./data"
 S_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MODEL_NAME = "DeepLabV3Plus"
+MODEL_NAME = "DeepLabV3P+"
 S_NAME_ENCODER = "efficientnet-b4"
 S_NAME_WEIGHTS = "imagenet"
-N_EPOCH_MAX = 5
+N_EPOCH_MAX = 20
 N_SIZE_BATCH_TRAINING = 8  # training batch size
 N_SIZE_BATCH_VALIDATION = 4  # validation batch size
 N_SIZE_BATCH_TEST = 1  # test batch size
@@ -77,13 +78,37 @@ wandb.config.update({
 
 # ======== SETUP ======== #
 
-# setup model
-model = smp.DeepLabV3Plus(
-    encoder_name = S_NAME_ENCODER,
-    encoder_weights = S_NAME_WEIGHTS,
-    in_channels = 3,
-    classes = 20,
+class CustomDeepLabV3Plus(smp.DeepLabV3Plus):
+    def __init__(self, *args, dropout_rate=0.5, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Access the ASPP module and modify its project layer
+        self.decoder.aspp[0].project = nn.Sequential(
+            self.decoder.aspp[0].project,
+            nn.Dropout(dropout_rate)
+        )
+
+
+# # Example usage
+model = CustomDeepLabV3Plus(
+    encoder_name= S_NAME_ENCODER,
+    encoder_weights=S_NAME_WEIGHTS,
+    in_channels=3,
+    classes=20,
+    dropout_rate=0.5
 )
+
+
+# # setup model
+# model = smp.DeepLabV3Plus(
+#     encoder_name = S_NAME_ENCODER,
+#     encoder_weights = S_NAME_WEIGHTS,
+#     in_channels = 3,
+#     classes = 20,
+# )
+
+# print(model)
+
+
 # U-Net model
 #model = smp.Unet(
 #    encoder_name = S_NAME_ENCODER,

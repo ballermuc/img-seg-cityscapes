@@ -46,7 +46,6 @@ class Epoch:
 
     def batch_update(self, image, target=None):
         if self.s_phase == "training":
-            # Perform inference, optimization, and loss evaluation
             self.optimizer.zero_grad()
             prediction = self.model.forward(image)
             loss = self.loss(prediction, target)
@@ -54,13 +53,11 @@ class Epoch:
             self.optimizer.step()
             return loss, prediction
         elif self.s_phase == "validation":
-            # Perform inference and loss evaluation
             with torch.inference_mode():
                 prediction = self.model.forward(image)
                 loss = self.loss(prediction, target)
             return loss, prediction
         else:  # assume "test"
-            # Perform inference only
             with torch.inference_mode():
                 prediction = self.model.forward(image)
             return None, prediction
@@ -137,6 +134,7 @@ class Epoch:
                     reduction="macro-imagewise",
                 ).detach().cpu().numpy()
 
+                # Per-class IoU
                 per_class_iou = smp.metrics.functional.iou_score(
                     tp=d_confusion["tp"],
                     fp=d_confusion["fp"],
@@ -148,7 +146,7 @@ class Epoch:
                 per_class_iou = per_class_iou.mean(axis=0)
                 logs["per_class_iou"] = per_class_iou
 
-            # Unified logging for W&B
+            # Unified logging for WandB
             if self.writer is not None:
                 phase = "Training" if self.s_phase == "training" else "Validation"
                 log_data = {
@@ -166,12 +164,7 @@ class Epoch:
                         class_name = class_names[class_idx] if class_idx < len(class_names) else f"Class_{class_idx}"
                         log_data[f"Class IoU/{class_name}/{phase}"] = float(class_iou)
 
-                # Only log predictions and images for validation
                 if self.s_phase == "validation":
-                    # Print file names being logged
-                    for file_name in l_p_image[:4]:
-                        print(f"Logging to WandB: {file_name}")
-
                     log_data.update({
                         "Predictions/Color": [
                             wandb.Image(
@@ -199,7 +192,6 @@ class Epoch:
                         ]
                     })
 
-                    # Log to WandB
-                    self.writer.log(log_data, step=i_epoch)
+                self.writer.log(log_data, step=i_epoch)
 
             return logs
