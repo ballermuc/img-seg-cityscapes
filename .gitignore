@@ -5,6 +5,9 @@ data/
 env/
 venv/
 
+# Ignore grad cam img
+grad_cam/
+
 # Ignore wandb
 wandb/
 
