@@ -50,6 +50,44 @@ def get_args():
 
     return parser.parse_args()
 
+def print_configuration(config):
+    print("\n" + "="*50)
+    print("Training Configuration")
+    print("="*50)
+    
+    # Model and training basics
+    print(f"{'Model':25}: {config.model}")
+    print(f"{'Encoder':25}: {config.encoder}")
+    print(f"{'Encoder Weights':25}: {config.encoder_weights}")
+    print(f"{'Epochs':25}: {config.epochs}")
+    print(f"{'Batch Size (Training)':25}: {config.batch_size_training}")
+    print(f"{'Batch Size (Validation)':25}: {config.batch_size_validation}")
+    print(f"{'Batch Size (Test)':25}: {config.batch_size_test}")
+    print(f"{'Learning Rate':25}: {config.learning_rate}")
+    print(f"{'Optimizer':25}: {config.optimizer}")
+    print(f"{'Number of Workers':25}: {config.num_workers}")
+
+    # Patch size and loss function
+    print("\n" + "-"*50)
+    print(f"{'Patch Size':25}: {config.patch_size}")
+    print(f"{'Loss Function':25}: {config.loss}")
+    print(f"{'Class Weights':25}: {config.class_weights}")
+
+    # Model-specific parameters
+    print("\n" + "-"*50)
+    print("Model-Specific Parameters")
+    print("-"*50)
+    if config.model == "DeepLabV3P+":
+        print(f"{'Encoder Output Stride':25}: {config.encoder_output_stride}")
+        print(f"{'Decoder Atrous Rates':25}: {config.decoder_atrous_rates}")
+        print(f"{'Decoder Channels':25}: {config.decoder_channels}")
+        print(f"{'Upsampling':25}: {config.upsampling}")
+    elif config.model == "Unet":
+        print(f"{'Decoder Use BatchNorm':25}: {config.decoder_use_batchnorm}")
+        print(f"{'Decoder Attention Type':25}: {config.decoder_attention_type}")
+    
+    print("="*50 + "\n")
+
 
 def parse_class_weights(class_weights_arg, num_classes, device):
     if class_weights_arg is None or class_weights_arg.lower() == "none":
@@ -103,6 +141,8 @@ def initialize_loss_function(config, class_weights):
 
 if __name__ == '__main__':
     args = get_args()
+
+    print_configuration(args)
 
     # WandB initialization
     wandb.init(
