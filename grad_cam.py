@@ -9,12 +9,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from dataset_cityscapes import *
 
-# Suppress specific warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="albumentations")
-warnings.filterwarnings("ignore", category=FutureWarning)
-
-# Set environment variable to suppress Albumentations update warning
-os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 def to_tensor(x, **kwargs):
     return x.transpose(2, 0, 1).astype("float32")
