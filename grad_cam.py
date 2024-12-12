@@ -20,11 +20,11 @@ S_NAME_CITY = "frankfurt"  # City for input image, e.g., "frankfurt"
 IMAGE_NAME = "frankfurt_000001_029086_leftImg8bit.png"  # Specific image to visualize
 S_NAME_ENCODER = "efficientnet-b4"
 S_NAME_WEIGHTS = "imagenet"
-P_DIR_MODEL = "./Workspace/DeepLabV3Plus_efficientnet-b4_BS_Train_8_Patch_512_Epochs_5/Checkpoints/best_model_epoch_0005.pth"
+P_DIR_MODEL = "./Workspace/DeepLabV3P+_efficientnet-b4_BS_60_Epochs_5_20241212_1747/Checkpoints/best_model_epoch_0005.pth"
 P_DIR_DATA = "./data"
 P_DIR_OUTPUT = "./grad_cam"  # Directory to save Grad-CAM outputs
 S_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-TARGET_CLASS = 14  # Target class index in Cityscapes (e.g., car, pedestrian, etc.)
+TARGET_CLASS = 13  # Target class index in Cityscapes (e.g., car, pedestrian, etc.)
 
 # Cityscapes categories
 CITYSCAPES_CLASSES = {
@@ -61,6 +61,8 @@ try:
 except FileNotFoundError:
     raise FileNotFoundError(f"Model file not found at {P_DIR_MODEL}")
 
+model_to_inspect = model.module if isinstance(model, torch.nn.DataParallel) else model
+
 # Input preprocessing
 preprocess_input = get_preprocessing_fn(encoder_name=S_NAME_ENCODER, pretrained=S_NAME_WEIGHTS)
 transform_full = A.Compose([
@@ -94,9 +96,11 @@ def guided_grad_cam(model, image, target_class, target_layer):
     """
     Compute Guided Grad-CAM for the given model and input image.
     """
-    model.eval()
+    # Handle DataParallel models
+    model_to_inspect = model.module if isinstance(model, torch.nn.DataParallel) else model
+    model_to_inspect.eval()
 
-    # Hook to capture gradients
+    # Hook to capture gradients and activations
     gradients = []
     activations = []
 
@@ -108,7 +112,7 @@ def guided_grad_cam(model, image, target_class, target_layer):
 
     # Register hooks on the target layer
     hook_registered = False
-    for name, module in model.named_modules():
+    for name, module in model_to_inspect.named_modules():
         if name == target_layer:
             module.register_forward_hook(forward_hook)
             module.register_full_backward_hook(backward_hook)
@@ -145,7 +149,7 @@ def guided_grad_cam(model, image, target_class, target_layer):
     grad_cam = np.maximum(grad_cam, 0)  # ReLU to keep positive contributions only
 
     # Normalize Grad-CAM
-    grad_cam = cv2.resize(grad_cam, (image_width, image_height))
+    grad_cam = cv2.resize(grad_cam, (image.shape[3], image.shape[2]))  # Match width, height
     grad_cam = (grad_cam - grad_cam.min()) / (grad_cam.max() - grad_cam.min())
 
     # Guided Backpropagation
@@ -153,6 +157,7 @@ def guided_grad_cam(model, image, target_class, target_layer):
     guided_grad_cam = guided_gradients.mean(axis=0) * grad_cam
 
     return grad_cam, guided_grad_cam
+
 
 
 # Identify the target layer

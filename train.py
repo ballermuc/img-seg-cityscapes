@@ -1,5 +1,6 @@
 import argparse
 import os
+import subprocess
 from datetime import datetime
 import cv2
 import torch
@@ -139,6 +140,38 @@ def initialize_loss_function(config, class_weights):
         raise ValueError(f"Unsupported loss function: {config.loss}")
 
 
+def kill_previous_processes():
+    """
+    Kill all Python processes running 'train.py' except the current one, to free GPU memory and display GPU memory usage.
+    """
+    try:
+        # Get the PID of the current process
+        current_pid = os.getpid()
+        
+        # Find all processes matching 'python train.py'
+        output = subprocess.check_output("ps aux | grep 'python train.py' | grep -v grep", shell=True)
+        for line in output.decode().splitlines():
+            # Extract PID from the output
+            pid = int(line.split()[1])
+            if pid == current_pid:
+                print(f"Skipping current process with PID: {current_pid}")
+                continue
+            print(f"Killing process with PID: {pid}")
+            os.kill(pid, 9)  # Force kill the process
+    except subprocess.CalledProcessError:
+        print("No previous 'train.py' processes found.")
+    
+    # Display GPU memory usage using nvidia-smi
+    try:
+        memory_usage = subprocess.check_output(
+            "nvidia-smi --query-gpu=memory.used,memory.total --format=csv", shell=True
+        )
+        print("Current GPU memory usage:")
+        print(memory_usage.decode())
+    except subprocess.CalledProcessError:
+        print("Failed to retrieve GPU memory usage.")
+
+
 if __name__ == '__main__':
     args = get_args()
 
@@ -146,9 +179,9 @@ if __name__ == '__main__':
 
     # WandB initialization
     wandb.init(
-        project="img-seg-cityscapes",
+        project="cityscapes-runs",
         config=vars(args),
-        name=f"{args.model}_{args.encoder}_BS_{args.batch_size_training}_Patch_{args.patch_size}_Epochs_{args.epochs}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+        name=f"{args.model}_{args.encoder}_BS_{args.batch_size_training}_Epochs_{args.epochs}_{datetime.now().strftime('%Y%m%d_%H%M')}"
     )
     config = wandb.config
 
@@ -163,8 +196,24 @@ if __name__ == '__main__':
     # Parse class weights
     class_weights = parse_class_weights(config.class_weights, num_classes=20, device=device)
 
+    # Free up Memory and kill previous processes
+    torch.cuda.empty_cache()
+    kill_previous_processes()
+
     # Initialize model
     model = initialize_model(config)
+
+    if torch.cuda.is_available():
+        num_gpus = torch.cuda.device_count()
+        if num_gpus > 1:
+            print(f"Using {num_gpus} GPUs with DataParallel")
+            model = torch.nn.DataParallel(model)  # Automatically uses all available GPUs
+        else:
+            print("Using a single GPU")
+    else:
+        print("Using CPU")
+
+    # Transfer model to device (either CPU or GPU)
     model.to(device)
 
     # Initialize loss function
@@ -220,7 +269,7 @@ if __name__ == '__main__':
     N_STEP_LOG = 1 # Logging Frequency
     max_score = 0
     for epoch in range(1, config.epochs + 1):
-        print(f"Epoch: {epoch} / {config.epochs}")
+        print(f"Epoch: {epoch} / {config.epochs} | LR = {round(scheduler.get_last_lr()[0], 8)}")
 
         # Training phase
         train_logs = epoch_training.run(loader_training, i_epoch=epoch)
@@ -233,7 +282,7 @@ if __name__ == '__main__':
             # Save best model
             if iou_score > max_score:
                 max_score = iou_score
-                torch.save(model.state_dict(), os.path.join(P_DIR_CKPT, f"best_model_epoch_{epoch:04d}.pth"))
+                torch.save(model, os.path.join(P_DIR_CKPT, f"best_model_epoch_{epoch:04d}.pth"))
                 print(f"New best model saved with IoU: {max_score:.4f}")
                 print("")
 
