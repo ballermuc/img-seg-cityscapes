@@ -6,11 +6,11 @@ export CUDA_VISIBLE_DEVICES=0,1,2
 export PYTHONHASHSEED=0
 
 # General training parameters
-BATCH_SIZE_TRAINING=60
+BATCH_SIZE_TRAINING=24
 BATCH_SIZE_VALIDATION=12
 BATCH_SIZE_TEST=6
 LEARNING_RATE=5e-4
-EPOCHS=5
+EPOCHS=50
 OPTIMIZER="Adam"
 NUM_WORKERS=16
 
@@ -25,10 +25,9 @@ LOSS="ce"  # Choose from 'ce', 'dice', 'focal'
 CLASS_WEIGHTS="none"  # Class weights as "none" or "11:10,12:10"
 
 # DeepLabV3+ specific parameters
-ENCODER_OUTPUT_STRIDE=16  # Choose between 8 and 16
-DECODER_ATROUS_RATES="12,24,36"
-DECODER_CHANNELS=256
-UPSAMPLING=4
+ENCODER_OUTPUT_STRIDE=8  # Choose between 8 and 16
+DECODER_ATROUS_RATES="6,12,18"
+DECODER_CHANNELS=512
 
 # Unet-specific parameters
 DECODER_USE_BATCHNORM="True"  # Choose from 'True', 'False', 'inplace'
@@ -58,6 +57,5 @@ python3 ./train.py \
   --encoder_output_stride=${ENCODER_OUTPUT_STRIDE} \
   --decoder_atrous_rates=${DECODER_ATROUS_RATES} \
   --decoder_channels=${DECODER_CHANNELS} \
-  --upsampling=${UPSAMPLING} \
   --decoder_use_batchnorm=${DECODER_USE_BATCHNORM} \
   --decoder_attention_type=${DECODER_ATTENTION_TYPE}

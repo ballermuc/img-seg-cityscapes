@@ -1,0 +1,20 @@
+Class,Pixel Count
+road,345264442
+building,201005428
+vegetation,158868008
+car,59731217
+sidewalk,49568652
+sky,30765347
+pole,13565658
+pedestrian,11913424
+terrain,7625026
+fence,7521741
+wall,6718315
+bicycle,6504475
+traffic_sign,6098373
+bus,3563120
+truck,2760211
+rider,1975596
+traffic_light,1808393
+train,1031648
+motorcycle,729415

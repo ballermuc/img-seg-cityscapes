@@ -146,12 +146,32 @@ class Epoch:
                 per_class_iou = per_class_iou.mean(axis=0)
                 logs["per_class_iou"] = per_class_iou
 
+                # Compute Pixel Accuracy
+                logs["pixel_accuracy"] = smp.metrics.functional.accuracy(
+                    tp=d_confusion["tp"],
+                    fp=d_confusion["fp"],
+                    fn=d_confusion["fn"],
+                    tn=d_confusion["tn"],
+                    reduction="macro-imagewise",
+                ).detach().cpu().numpy()
+
+                # Compute Dice Coefficient
+                logs["dice_coefficient"] = smp.metrics.functional.f1_score(
+                    tp=d_confusion["tp"],
+                    fp=d_confusion["fp"],
+                    fn=d_confusion["fn"],
+                    tn=d_confusion["tn"],
+                    reduction="macro-imagewise",
+                ).detach().cpu().numpy()
+
             # Unified logging for WandB
             if self.writer is not None:
                 phase = "Training" if self.s_phase == "training" else "Validation"
                 log_data = {
                     f"Overall IoU/{phase}": logs.get("iou_score", 0),
                     f"Loss/{phase}": logs.get(self.loss.__name__, 0),
+                    f"Pixel Accuracy/{phase}": logs.get("pixel_accuracy", 0),
+                    f"Dice Coefficient/{phase}": logs.get("dice_coefficient", 0),
                     "Epoch": i_epoch,
                 }
 

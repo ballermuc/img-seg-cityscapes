@@ -1,6 +1,8 @@
 import albumentations as A
 import cv2
 import numpy as np
+import seaborn as sns  
+import pandas as pd
 import torch
 import os
 import warnings
@@ -8,6 +10,9 @@ from segmentation_models_pytorch.encoders import get_preprocessing_fn
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from dataset_cityscapes import *
+from dataset_cityscapes import DatasetCityscapesSemantic
+import lookup_table as lut
+
 
 
 def to_tensor(x, **kwargs):
@@ -24,7 +29,7 @@ P_DIR_MODEL = "./Workspace/DeepLabV3P+_efficientnet-b4_BS_60_Epochs_5_20241212_1
 P_DIR_DATA = "./data"
 P_DIR_OUTPUT = "./grad_cam"  # Directory to save Grad-CAM outputs
 S_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-TARGET_CLASS = 13  # Target class index in Cityscapes (e.g., car, pedestrian, etc.)
+TARGET_CLASS = 6  # Target class index in Cityscapes (e.g., car, pedestrian, etc.)
 
 # Cityscapes categories
 CITYSCAPES_CLASSES = {
@@ -92,7 +97,7 @@ preprocessed_image = preprocess_image(original_image)
 
 # ======== GUIDED GRAD-CAM IMPLEMENTATION ======== #
 
-def guided_grad_cam(model, image, target_class, target_layer):
+def compute_grad_cam(model, image, target_class, target_layer):
     """
     Compute Guided Grad-CAM for the given model and input image.
     """
@@ -165,7 +170,7 @@ def guided_grad_cam(model, image, target_class, target_layer):
 target_layer = "segmentation_head.0"  # Example: Choose the last convolutional layer
 
 # Compute Guided Grad-CAM
-grad_cam, guided_grad_cam = guided_grad_cam(model, preprocessed_image, TARGET_CLASS, target_layer)
+grad_cam, guided_grad_cam = compute_grad_cam(model, preprocessed_image, TARGET_CLASS, target_layer)
 
 # ======== SAVE IMAGES ======== #
 
@@ -189,3 +194,237 @@ guided_grad_cam_path = os.path.join(P_DIR_OUTPUT, f"{IMAGE_NAME.split('.')[0]}_{
 cv2.imwrite(guided_grad_cam_path, guided_grad_cam_rescaled)
 
 print(f"Images saved to {P_DIR_OUTPUT}:\n- {original_path}\n- {grad_cam_path}\n- {guided_grad_cam_path}")
+
+
+
+# ======== Compute Activation-Weighted Mask ======== #
+def save_activation_barplot_with_gt_distribution(grad_cam, true_label, class_names, output_path, target_class_name):
+    """
+    Create and save a bar plot of ground truth class distribution for Grad-CAM activations of the target class.
+    """
+    grad_cam_normalized = np.clip(grad_cam, a_min=0, a_max=None)
+
+    activation_sums = [
+        np.sum(grad_cam_normalized * (true_label == class_idx))
+        for class_idx in range(len(class_names))
+    ]
+
+    sorted_indices = np.argsort(activation_sums)[::-1]
+    sorted_sums = [activation_sums[i] for i in sorted_indices]
+    sorted_class_names = [class_names[i] for i in sorted_indices]
+
+    plt.figure(figsize=(12, 6))
+    plt.bar(sorted_class_names, sorted_sums, color="skyblue")
+    plt.xlabel("Ground Truth Classes")
+    plt.ylabel("Activation Sum")
+    plt.title(f"Activation Sum Distribution for '{target_class_name}' Activations")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+
+
+def load_ground_truth_mask(city, image_name, data_dir):
+    mask_name = image_name.replace("_leftImg8bit.png", "_gtFine_labelIds.png")
+    mask_path = os.path.join(data_dir, "gtFine", "val", city, mask_name)
+    mask = cv2.imread(mask_path, cv2.IMREAD_UNCHANGED)
+    if mask is None:
+        raise FileNotFoundError(f"Failed to load ground truth mask: {mask_path}")
+    return mask
+
+
+def map_id_to_trainid(true_label, lut_id2trainid, device):
+    """
+    Map ground truth label IDs to train IDs using a lookup table.
+    Ensure tensor and LUT are on the same device.
+    """
+    true_label_tensor = torch.from_numpy(true_label).unsqueeze(0).unsqueeze(0).to(torch.uint8).to(device)
+    lut_id2trainid = lut_id2trainid.to(device)
+    return lut.lookup_nchw(true_label_tensor, lut_id2trainid).squeeze().cpu().numpy()
+
+
+# ======== Initialize Dataset and Load Ground Truth ======== #
+from dataset_cityscapes import DatasetCityscapesSemantic
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+dataset = DatasetCityscapesSemantic(
+    device=device,
+    root="./data",  # Update with your actual data directory
+    split="val",
+    mode="fine",
+)
+
+true_label_raw = load_ground_truth_mask(S_NAME_CITY, IMAGE_NAME, P_DIR_DATA)
+true_label = map_id_to_trainid(true_label_raw, dataset.th_i_lut_id2trainid, device)
+
+# ======== Compute Grad-CAM ======== #
+grad_cam_output, _ = compute_grad_cam(model, preprocessed_image, TARGET_CLASS, target_layer)
+
+# ======== Apply Grad-CAM Mask and Compute Bar Plot ======== #
+barplot_output_path = os.path.join(
+    P_DIR_OUTPUT, f"{IMAGE_NAME.split('.')[0]}_{CATEGORY_NAME}_gt_distribution_barplot.png"
+)
+save_activation_barplot_with_gt_distribution(
+    grad_cam_output,
+    true_label,
+    list(CITYSCAPES_CLASSES.values()),
+    barplot_output_path,
+    CATEGORY_NAME
+)
+
+
+####################################
+def save_combined_activation_barplot(grad_cam_dict, true_label, class_names, output_path):
+    """
+    Create and save a combined bar plot of ground truth class distribution
+    for Grad-CAM activations of all target classes, with distinct separation for each target class.
+    """
+    activation_sums_dict = {}
+
+    for target_class_name, grad_cam in grad_cam_dict.items():
+        grad_cam_normalized = np.clip(grad_cam, a_min=0, a_max=None)
+        activation_sums = [
+            np.sum(grad_cam_normalized * (true_label == class_idx))
+            for class_idx in range(len(class_names))
+        ]
+        activation_sums_dict[target_class_name] = activation_sums
+
+    # Create a combined bar plot with separated sections for each target class
+    x_labels = class_names
+    num_classes = len(class_names)
+    x_spacing = num_classes + 3  # Add spacing between groups
+    x_positions = np.arange(0, len(activation_sums_dict) * x_spacing, x_spacing)  # Group positions
+
+    plt.figure(figsize=(20, 10))
+    bar_width = 0.8  # Width of each bar
+    colors = plt.cm.tab20.colors  # Use a colormap for consistent coloring
+
+    for idx, (target_class_name, activation_sums) in enumerate(activation_sums_dict.items()):
+        # Calculate positions for bars of this group
+        x = x_positions[idx] + np.arange(num_classes)
+
+        plt.bar(
+            x,
+            activation_sums,
+            bar_width,
+            label=f"Target Class: {target_class_name}",
+            color=colors[idx % len(colors)],
+        )
+        # Add a vertical separator between groups for clarity
+        if idx > 0:
+            plt.axvline(x=x_positions[idx] - 1.5, color='gray', linestyle='--', linewidth=1.2)
+
+    plt.xlabel("Ground Truth Classes")
+    plt.ylabel("Activation Sum")
+    plt.title("Activation Sum Distribution Across All Target Classes")
+    plt.xticks(
+        np.concatenate([x_positions[i] + np.arange(num_classes) for i in range(len(activation_sums_dict))]),
+        [class_name for _ in range(len(activation_sums_dict)) for class_name in class_names],
+        rotation=45,
+        ha="right"
+    )
+    plt.legend()
+    plt.tight_layout()
+
+    # Save the plot
+    plt.savefig(output_path)
+    plt.close()
+    print(f"Combined bar plot saved at {output_path}")
+
+
+# ======== Compute Grad-CAM for All Target Classes ======== #
+grad_cam_dict = {}
+
+for target_class, target_class_name in CITYSCAPES_CLASSES.items():
+    grad_cam_output, _ = compute_grad_cam(model, preprocessed_image, target_class, target_layer)
+    grad_cam_dict[target_class_name] = grad_cam_output
+
+# ======== Apply Grad-CAM Mask and Compute Combined Bar Plot ======== #
+combined_barplot_output_path = os.path.join(
+    P_DIR_OUTPUT, f"{IMAGE_NAME.split('.')[0]}_combined_gt_distribution_barplot.png"
+)
+
+save_combined_activation_barplot(
+    grad_cam_dict,
+    true_label,
+    list(CITYSCAPES_CLASSES.values()),
+    combined_barplot_output_path
+)
+
+
+
+
+################## CONFUSION ############
+def compute_confusion_matrix_real_sum(grad_cam_dict, true_label, class_names):
+    """
+    Compute a confusion matrix using real activation sums from Grad-CAM activations.
+
+    Args:
+        grad_cam_dict (dict): Grad-CAM activations for all target classes.
+        true_label (np.ndarray): Ground truth labels (mapped to train IDs).
+        class_names (list): List of class names.
+
+    Returns:
+        pd.DataFrame: Confusion matrix as a DataFrame.
+    """
+    num_classes = len(class_names)
+    confusion_matrix = np.zeros((num_classes, num_classes), dtype=np.float32)
+
+    for target_class_idx, (target_class_name, grad_cam) in enumerate(grad_cam_dict.items()):
+        grad_cam_normalized = np.clip(grad_cam, a_min=0, a_max=None)
+
+        for gt_class_idx in range(num_classes):
+            # Compute total activation for each ground truth class
+            class_activation_sum = np.sum(grad_cam_normalized * (true_label == gt_class_idx))
+            confusion_matrix[target_class_idx, gt_class_idx] = class_activation_sum
+
+    # Convert to DataFrame for better handling with Seaborn
+    confusion_df = pd.DataFrame(confusion_matrix, index=class_names, columns=class_names)
+    return confusion_df
+
+
+def plot_confusion_matrix_real_sum_row_normalized(confusion_df, output_path):
+    """
+    Plot and save a confusion matrix where coloring is normalized per row.
+
+    Args:
+        confusion_df (pd.DataFrame): Confusion matrix as a DataFrame.
+        output_path (str): Path to save the confusion matrix plot.
+    """
+    # Normalize each row
+    row_normalized_df = confusion_df.div(confusion_df.sum(axis=1), axis=0)
+
+    plt.figure(figsize=(14, 12))
+    sns.heatmap(
+        row_normalized_df,
+        annot=True,
+        fmt=".2f",  # Show normalized values with two decimals
+        cmap="YlGnBu",  # Use a perceptually uniform colormap
+        cbar=True,
+        square=True,
+        linewidths=0.5,
+        annot_kws={"size": 10},
+    )
+    plt.title("Row-Normalized Grad-CAM Confusion Matrix")
+    plt.xlabel("Ground Truth Classes")
+    plt.ylabel("Target Classes")
+    plt.xticks(rotation=45, ha="right")
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+    print(f"Row-normalized confusion matrix saved at {output_path}")
+
+
+# ======== Compute Grad-CAM Confusion Matrix ======== #
+confusion_df_real_sum = compute_confusion_matrix_real_sum(grad_cam_dict, true_label, list(CITYSCAPES_CLASSES.values()))
+
+# ======== Plot Confusion Matrix ======== #
+confusion_matrix_real_sum_output_path = os.path.join(
+    P_DIR_OUTPUT, f"{IMAGE_NAME.split('.')[0]}_grad_cam_confusion_matrix_real_sum.png"
+)
+plot_confusion_matrix_real_sum_row_normalized(confusion_df_real_sum, confusion_matrix_real_sum_output_path)
+
+
+
+

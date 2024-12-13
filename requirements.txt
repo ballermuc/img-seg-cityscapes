@@ -39,6 +39,7 @@ nvidia-nvjitlink-cu12==12.4.127
 nvidia-nvtx-cu12==12.4.127
 opencv-python-headless==4.10.0.84
 packaging==24.2
+pandas==2.2.3
 pillow==11.0.0
 platformdirs==4.3.6
 pretrainedmodels==0.7.4
@@ -48,11 +49,13 @@ pydantic==2.10.3
 pydantic_core==2.27.1
 pyparsing==3.2.0
 python-dateutil==2.9.0.post0
+pytz==2024.2
 PyYAML==6.0.2
 requests==2.32.3
 safetensors==0.4.5
 scikit-learn==1.6.0
 scipy==1.14.1
+seaborn==0.13.2
 segmentation-models-pytorch==0.3.4
 sentry-sdk==2.19.2
 setproctitle==1.3.4
@@ -69,5 +72,6 @@ torchvision==0.20.1
 tqdm==4.67.1
 triton==3.1.0
 typing_extensions==4.12.2
+tzdata==2024.2
 urllib3==2.2.3
 wandb==0.19.0

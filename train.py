@@ -43,11 +43,18 @@ def get_args():
     parser.add_argument('--encoder_output_stride', type=int, choices=[8, 16], required=False, default=16)
     parser.add_argument('--decoder_atrous_rates', type=str, required=False, default="12,24,36")
     parser.add_argument('--decoder_channels', type=int, required=False, default=256)
-    parser.add_argument('--upsampling', type=int, required=False, default=4)
 
     # Unet specific parameters
     parser.add_argument('--decoder_use_batchnorm', type=str, choices=['True', 'False', 'inplace'], required=False, default='True')
     parser.add_argument('--decoder_attention_type', type=str, choices=['None', 'scse'], required=False, default=None)
+
+    # Data Augmentation flags
+    parser.add_argument('--random_crop', type=bool, required=False, default=True, help="Enable Random Cropping")
+    parser.add_argument('--horizontal_flip', type=bool, required=False, default=True, help="Enable Horizontal Flipping")
+    parser.add_argument('--shift_scale_rotate', type=bool, required=False, default=True, help="Enable Shift, Scale, and Rotate")
+    parser.add_argument('--brightness_contrast', type=bool, required=False, default=True, help="Enable Brightness/Contrast Adjustment")
+    parser.add_argument('--hue_saturation_value', type=bool, required=False, default=True, help="Enable Hue/Saturation Adjustment")
+    parser.add_argument('--gaussian_blur', type=bool, required=False, default=True, help="Enable Gaussian Blur")
 
     return parser.parse_args()
 
@@ -82,7 +89,6 @@ def print_configuration(config):
         print(f"{'Encoder Output Stride':25}: {config.encoder_output_stride}")
         print(f"{'Decoder Atrous Rates':25}: {config.decoder_atrous_rates}")
         print(f"{'Decoder Channels':25}: {config.decoder_channels}")
-        print(f"{'Upsampling':25}: {config.upsampling}")
     elif config.model == "Unet":
         print(f"{'Decoder Use BatchNorm':25}: {config.decoder_use_batchnorm}")
         print(f"{'Decoder Attention Type':25}: {config.decoder_attention_type}")
@@ -100,6 +106,30 @@ def parse_class_weights(class_weights_arg, num_classes, device):
     return class_weights
 
 
+def get_augmentations(config):
+    """Create a dynamic augmentation pipeline based on the configuration."""
+    augmentations = []
+
+    if config.random_crop:
+        augmentations.append(A.RandomCrop(config.patch_size, config.patch_size))
+    if config.horizontal_flip:
+        augmentations.append(A.HorizontalFlip(p=0.5))
+    if config.shift_scale_rotate:
+        augmentations.append(A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5))
+    if config.brightness_contrast:
+        augmentations.append(A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5))
+    if config.hue_saturation_value:
+        augmentations.append(A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5))
+    if config.gaussian_blur:
+        augmentations.append(A.GaussianBlur(blur_limit=(3, 5), p=0.3))
+
+    augmentations.extend([
+        A.Lambda(name="image_preprocessing", image=preprocess_input),
+        A.Lambda(name="to_tensor", image=to_tensor),
+    ])
+    return A.Compose(augmentations)
+
+
 def initialize_model(config, in_channels=3, classes=20):
     if config.model == "DeepLabV3P+":
         decoder_atrous_rates = tuple(map(int, config.decoder_atrous_rates.split(",")))
@@ -111,7 +141,6 @@ def initialize_model(config, in_channels=3, classes=20):
             decoder_atrous_rates=decoder_atrous_rates,
             in_channels=in_channels,
             classes=classes,
-            upsampling=config.upsampling,
         )
     elif config.model == "Unet":
         return smp.Unet(
@@ -226,12 +255,7 @@ if __name__ == '__main__':
 
     # Setup input normalization
     preprocess_input = get_preprocessing_fn(config.encoder, pretrained="imagenet")
-    transform_crop = A.Compose([
-        A.RandomCrop(config.patch_size, config.patch_size),
-        # A.HorizontalFlip(p=0.25),
-        A.Lambda(name="image_preprocessing", image=preprocess_input),
-        A.Lambda(name="to_tensor", image=to_tensor)
-    ])
+    transform_crop = get_augmentations(config)
     transform_full = A.Compose([
         A.Lambda(name="image_preprocessing", image=preprocess_input),
         A.Lambda(name="to_tensor", image=to_tensor)
