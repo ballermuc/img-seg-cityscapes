@@ -9,10 +9,10 @@
 ## Key Files
 
 - **`dataset_cityscapes.py`**: Loads and preprocesses Cityscapes data, including class-to-train ID mappings and transformations.
-- - **`train.py`**: Main script for training, supporting configurable models, loss functions, and augmentations.
+- **`train.py`**: Main script for training, supporting configurable models, loss functions, and augmentations.
 - **`epoch.py`**: Handles training, validation, and testing, including logging and metric computation (IoU, Dice, etc.).
 - **`run.sh`**: Configures and runs the training pipeline.
-- - **`eda.py`**: Performs exploratory data analysis, generating pixel distribution reports and visualizations.
+- **`eda.py`**: Performs exploratory data analysis, generating pixel distribution reports and visualizations.
 
 ---
 
